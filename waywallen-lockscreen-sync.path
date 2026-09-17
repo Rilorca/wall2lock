@@ -1,0 +1,10 @@
+[Unit]
+Description=Watch Waywallen config changes to update lockscreen wallpaper
+After=graphical-session.target
+
+[Path]
+PathModified=%h/.config/waywallen/config.toml
+Unit=waywallen-lockscreen-sync.service
+
+[Install]
+WantedBy=default.target
