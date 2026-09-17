@@ -17,6 +17,12 @@ mkdir -p "$TMP_STAGE/i18n"
 cp -f "$SCRIPT_DIR/sync-waywallen-lockscreen.sh" "$TMP_STAGE/bin/sync-waywallen-lockscreen.sh"
 chmod +x "$TMP_STAGE/bin/sync-waywallen-lockscreen.sh"
 
+cp -f "$SCRIPT_DIR/waywallen_extractor.py" "$TMP_STAGE/bin/waywallen_extractor.py"
+chmod +x "$TMP_STAGE/bin/waywallen_extractor.py"
+
+cp -f "$SCRIPT_DIR/patch-renderer.py" "$TMP_STAGE/patch-renderer.py"
+chmod +x "$TMP_STAGE/patch-renderer.py"
+
 cp -f "$SCRIPT_DIR/install.sh" "$TMP_STAGE/install.sh"
 chmod +x "$TMP_STAGE/install.sh"
 

@@ -92,8 +92,8 @@ CSS_RULES="
 #lockDialogGroup {
   background-image: url('file://$GDM_WALLPAPER') !important;
   background-repeat: no-repeat !important;
-  background-size: cover !important;
-  background-position: center !important;
+  background-size: 100% 100% !important;
+  background-position: 0 0 !important;
 }
 "
 

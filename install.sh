@@ -5,12 +5,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "Instalando waywallen-lockscreen-sync..."
 
-# 1. Copiar script a ~/.local/bin
+# 1. Copiar scripts a ~/.local/bin
 mkdir -p "$HOME/.local/bin"
 cp -f "$SCRIPT_DIR/sync-waywallen-lockscreen.sh" "$HOME/.local/bin/"
 chmod +x "$HOME/.local/bin/sync-waywallen-lockscreen.sh"
+cp -f "$SCRIPT_DIR/waywallen_extractor.py" "$HOME/.local/bin/"
+chmod +x "$HOME/.local/bin/waywallen_extractor.py"
 
-# 2. Copiar unidades de systemd
+# 2. Integrar captura nativa de alta fidelidad con renderer de GNOME si está disponible
+if [[ -f "$SCRIPT_DIR/patch-renderer.py" ]]; then
+    echo "Configurando captura nativa de alta resolución con Waywallen..."
+    python3 "$SCRIPT_DIR/patch-renderer.py" || true
+    pkill -f "renderer.js" 2>/dev/null || true
+fi
+
+# 3. Copiar unidades de systemd
 mkdir -p "$HOME/.config/systemd/user"
 cp -f "$SCRIPT_DIR/waywallen-lockscreen-sync.service" "$HOME/.config/systemd/user/"
 cp -f "$SCRIPT_DIR/waywallen-lockscreen-sync.path" "$HOME/.config/systemd/user/"

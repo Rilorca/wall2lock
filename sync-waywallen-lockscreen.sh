@@ -23,7 +23,7 @@ if [[ ! -f "$CONFIG_PATH" ]]; then
 fi
 
 # 1. First attempt: global last_wallpaper
-WALLPAPER_ID=$(awk -F '=' '/^\[global\]/,/^\[/ { if ($1 ~ /^\s*last_wallpaper\s*$/) { gsub(/["[:space:]]/, "", $2); print $2 } }' "$CONFIG_PATH" | head -n 1)
+WALLPAPER_ID=$(awk -F '=' '/^\[global\]/ { in_global=1; next } /^\[/ { in_global=0 } in_global && $1 ~ /^\s*last_wallpaper\s*$/ { gsub(/["[:space:]]/, "", $2); print $2; exit }' "$CONFIG_PATH")
 
 # 2. Fallback: look for display-specific wallpaper that is not empty, not 0, not none
 if [[ -z "$WALLPAPER_ID" || "$WALLPAPER_ID" == "0" || "$WALLPAPER_ID" == "none" ]]; then
@@ -51,97 +51,84 @@ fi
 
 IFS='|' read -r TYPE LIB_PATH ITEM_PATH PREVIEW_PATH <<< "$RESULT"
 
-# Function to resolve full path
-resolve_path() {
-    local base="$1"
-    local rel="$2"
-    if [[ "$rel" = /* ]]; then
-        echo "$rel"
-    else
-        echo "$base/$rel"
-    fi
-}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+EXTRACTOR="$SCRIPT_DIR/waywallen_extractor.py"
+MONITORS_XML="${MONITORS_XML:-$HOME/.config/monitors.xml}"
 
-USER_DIR="$(dirname "$USER_WALLPAPER")"
-mkdir -p "$USER_DIR"
-TARGET_TEMP="${USER_DIR}/.extract_tmp_$$.jpg"
-SOURCE_IMG=""
+# High-resolution multi-monitor extraction using waywallen_extractor.py
+if [[ -f "$EXTRACTOR" ]] && command -v python3 >/dev/null 2>&1; then
+    python3 "$EXTRACTOR" \
+        --type "$TYPE" \
+        --lib "$LIB_PATH" \
+        --item "$ITEM_PATH" \
+        --preview "$PREVIEW_PATH" \
+        --user-out "$USER_WALLPAPER" \
+        --gdm-out "$GDM_WALLPAPER" \
+        --sddm-out "$SDDM_WALLPAPER" \
+        --monitors "$MONITORS_XML"
+else
+    # Fallback extraction logic
+    resolve_path() {
+        local base="$1"
+        local rel="$2"
+        if [[ "$rel" = /* ]]; then
+            echo "$rel"
+        else
+            echo "$base/$rel"
+        fi
+    }
 
-# Clean up temp file on exit
-trap 'rm -f "$TARGET_TEMP" 2>/dev/null || true' EXIT
+    USER_DIR="$(dirname "$USER_WALLPAPER")"
+    mkdir -p "$USER_DIR"
+    TARGET_TEMP="${USER_DIR}/.extract_tmp_$$.jpg"
+    SOURCE_IMG=""
 
-# Determine source file
-if [[ "$TYPE" == "video" ]]; then
-    FULL_VIDEO=$(resolve_path "$LIB_PATH" "$ITEM_PATH")
-    if [[ -f "$FULL_VIDEO" ]]; then
-        # Extract high quality frame from video (1 second in, fallback to beginning)
-        ffmpeg -y -ss 00:00:01 -i "$FULL_VIDEO" -vframes 1 -q:v 2 "$TARGET_TEMP" 2>/dev/null || \
-        ffmpeg -y -i "$FULL_VIDEO" -vframes 1 -q:v 2 "$TARGET_TEMP" 2>/dev/null || true
-        if [[ -s "$TARGET_TEMP" ]]; then
-            SOURCE_IMG="$TARGET_TEMP"
+    trap 'rm -f "$TARGET_TEMP" 2>/dev/null || true' EXIT
+
+    if [[ "$TYPE" == "video" ]]; then
+        FULL_VIDEO=$(resolve_path "$LIB_PATH" "$ITEM_PATH")
+        if [[ -f "$FULL_VIDEO" ]]; then
+            ffmpeg -y -ss 00:00:01 -i "$FULL_VIDEO" -vframes 1 -q:v 2 "$TARGET_TEMP" 2>/dev/null || \
+            ffmpeg -y -i "$FULL_VIDEO" -vframes 1 -q:v 2 "$TARGET_TEMP" 2>/dev/null || true
+            if [[ -s "$TARGET_TEMP" ]]; then
+                SOURCE_IMG="$TARGET_TEMP"
+            fi
         fi
     fi
-fi
 
-# If not video or video extraction failed, check preview path
-if [[ -z "$SOURCE_IMG" ]]; then
-    if [[ -n "$PREVIEW_PATH" && "$PREVIEW_PATH" != "NULL" ]]; then
+    if [[ -z "$SOURCE_IMG" ]]; then
+        ITEM_FULL=$(resolve_path "$LIB_PATH" "$ITEM_PATH")
+        if [[ -f "$ITEM_FULL" ]]; then
+            SOURCE_IMG="$ITEM_FULL"
+        fi
+    fi
+
+    if [[ -z "$SOURCE_IMG" && -n "$PREVIEW_PATH" && "$PREVIEW_PATH" != "NULL" ]]; then
         PREV_FULL=$(resolve_path "$LIB_PATH" "$PREVIEW_PATH")
         if [[ -f "$PREV_FULL" ]]; then
             SOURCE_IMG="$PREV_FULL"
         fi
     fi
-fi
 
-# Fallback to item path directly (e.g. static image)
-if [[ -z "$SOURCE_IMG" ]]; then
-    ITEM_FULL=$(resolve_path "$LIB_PATH" "$ITEM_PATH")
-    if [[ -f "$ITEM_FULL" ]]; then
-        SOURCE_IMG="$ITEM_FULL"
+    if [[ -z "$SOURCE_IMG" || ! -f "$SOURCE_IMG" ]]; then
+        echo "Could not find image source for wallpaper"
+        exit 1
     fi
-fi
 
-if [[ -z "$SOURCE_IMG" || ! -f "$SOURCE_IMG" ]]; then
-    echo "Could not find image source for wallpaper"
-    exit 1
-fi
-
-# Convert to standard high-quality JPEG if not already from TARGET_TEMP
-if [[ "$SOURCE_IMG" != "$TARGET_TEMP" ]]; then
-    # Use ffmpeg to convert GIF/PNG/WebP/etc. to clean full JPEG
-    ffmpeg -y -i "$SOURCE_IMG" -vframes 1 -q:v 2 "$TARGET_TEMP" 2>/dev/null || true
-    if [[ ! -s "$TARGET_TEMP" ]]; then
-        # Fallback copy if ffmpeg fails
-        cp -f "$SOURCE_IMG" "$TARGET_TEMP"
+    if [[ "$SOURCE_IMG" != "$TARGET_TEMP" ]]; then
+        ffmpeg -y -i "$SOURCE_IMG" -vframes 1 -q:v 2 "$TARGET_TEMP" 2>/dev/null || cp -f "$SOURCE_IMG" "$TARGET_TEMP"
     fi
-fi
 
-# Atomically replace USER_WALLPAPER
-mv -f "$TARGET_TEMP" "$USER_WALLPAPER"
-chmod 644 "$USER_WALLPAPER" 2>/dev/null || true
+    mv -f "$TARGET_TEMP" "$USER_WALLPAPER"
+    chmod 644 "$USER_WALLPAPER" 2>/dev/null || true
 
-# If GDM file is writable, copy there (Login Screen / Greeter at PC boot)
-if [[ -w "$GDM_WALLPAPER" ]]; then
-    cp -f "$USER_WALLPAPER" "$GDM_WALLPAPER" 2>/dev/null || cat "$USER_WALLPAPER" > "$GDM_WALLPAPER" 2>/dev/null || true
-    chmod 644 "$GDM_WALLPAPER" 2>/dev/null || true
-elif [[ -w "$(dirname "$GDM_WALLPAPER")" ]]; then
-    GDM_TEMP="$(dirname "$GDM_WALLPAPER")/.gdm_tmp_$$.jpg"
-    cp -f "$USER_WALLPAPER" "$GDM_TEMP" 2>/dev/null || true
-    if [[ -f "$GDM_TEMP" ]]; then
-        mv -f "$GDM_TEMP" "$GDM_WALLPAPER" 2>/dev/null || true
+    if [[ -w "$GDM_WALLPAPER" ]]; then
+        cp -f "$USER_WALLPAPER" "$GDM_WALLPAPER" 2>/dev/null || cat "$USER_WALLPAPER" > "$GDM_WALLPAPER" 2>/dev/null || true
         chmod 644 "$GDM_WALLPAPER" 2>/dev/null || true
     fi
-fi
 
-# If SDDM file is writable, copy there
-if [[ -w "$SDDM_WALLPAPER" ]]; then
-    cp -f "$USER_WALLPAPER" "$SDDM_WALLPAPER" 2>/dev/null || cat "$USER_WALLPAPER" > "$SDDM_WALLPAPER" 2>/dev/null || true
-    chmod 644 "$SDDM_WALLPAPER" 2>/dev/null || true
-elif [[ -w "$(dirname "$SDDM_WALLPAPER")" ]]; then
-    SDDM_TEMP="$(dirname "$SDDM_WALLPAPER")/.sddm_tmp_$$.jpg"
-    cp -f "$USER_WALLPAPER" "$SDDM_TEMP" 2>/dev/null || true
-    if [[ -f "$SDDM_TEMP" ]]; then
-        mv -f "$SDDM_TEMP" "$SDDM_WALLPAPER" 2>/dev/null || true
+    if [[ -w "$SDDM_WALLPAPER" ]]; then
+        cp -f "$USER_WALLPAPER" "$SDDM_WALLPAPER" 2>/dev/null || cat "$USER_WALLPAPER" > "$SDDM_WALLPAPER" 2>/dev/null || true
         chmod 644 "$SDDM_WALLPAPER" 2>/dev/null || true
     fi
 fi

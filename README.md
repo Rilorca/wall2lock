@@ -5,15 +5,19 @@ Sincronizador automático del fondo de pantalla activo en [Waywallen](https://gi
 ## Características
 - **Garantía total de pantalla al reiniciar el PC y en bloqueo**: Funciona tanto si recién se prendió el computador (pantalla de inicio GDM / SDDM antes del login) como dentro de la sesión activa con `Super+L`.
 - **Soporte nativo para GDM (GNOME)**: Inyecta y compila limpiamente la regla de background en `gnome-shell-theme.gresource` apuntando a `/usr/share/backgrounds/waywallen_lock.jpg`. Esto evita que GDM muestre la pantalla gris `#222226` por defecto.
+- **Soporte Multi-Monitor Nativo (Duplicación por pantalla)**: Detecta automáticamente la disposición virtual y resolución de cada monitor mediante `~/.config/monitors.xml`. Crea un lienzo compuesto unificado (ej. 4480x1440 para configuraciones 2560x1440 + 1920x1080) duplicando y ajustando el fondo por monitor sin deformaciones ni cortes entre pantallas.
+- **Captura GPU de Alta Fidelidad en Tiempo Real**: Para fondos complejos y animados (escenas 3D / 2D Spine puppets de Wallpaper Engine con decenas de capas y shaders), captura directamente el búfer compuesto final desde el `Gsk.Renderer` de Waywallen. Esto elimina completamente el problema de texturas parciales (ojos flotantes, fondos transparentes o previews pixeladas).
 - **Sin necesidad de sudo recurrente**: La configuración de permisos del archivo `/usr/share/backgrounds/waywallen_lock.jpg` se realiza una sola vez. Cada cambio de wallpaper posterior se actualiza inmediatamente por el usuario sin contraseñas.
 - **Conversión universal a JPEG de alta fidelidad**: Utiliza `ffmpeg` para extraer fotogramas limpios de videos (MP4, WebM) y convertir previsualizaciones (GIF animado, PNG, WebP) a JPEG estándar compatible con lockscreens.
 - **Soporte completo GNOME**: Configura de manera atómica y simultánea `picture-uri` (modo claro), `picture-uri-dark` (modo oscuro) y `org.gnome.desktop.screensaver picture-uri`.
 - **Compatibilidad KDE Plasma**: Configura `kscreenlockerrc` (`Image` y `PreviewImage`).
 - **Soporte SDDM**: Actualiza `/usr/share/sddm/waywallen_lock.jpg` para entornos KDE / SDDM.
-- **Suite de Pruebas Unitarias Integrada (15 pruebas)**: Valida con mocks aislados la robustez ante fallos, parsing toml, sqlite3, ffmpeg, gsettings, compilación/restauración de GDM y el parser St de GNOME Shell.
+- **Suite de Pruebas Unitarias Integrada (18 pruebas)**: Valida con mocks aislados la robustez ante fallos, parsing toml, sqlite3, ffmpeg, gsettings, compilación/restauración de GDM, composición multi-monitor y captura GPU.
 
 ## Estructura del Proyecto
 - `sync-waywallen-lockscreen.sh`: Script principal de extracción, conversión a JPEG y actualización de fondos.
+- `waywallen_extractor.py`: Motor de extracción de texturas, soporte de escenas y compositor multi-monitor.
+- `patch-renderer.py`: Integrador de capturas nativas GPU con el renderer de GNOME de Waywallen.
 - `setup-gdm-theme.sh`: Script con permisos root para configurar el tema de GDM en GNOME (con soporte para `--restore`).
 - `setup-sddm-theme.sh`: Script auxiliar con permisos root para configurar SDDM.
 - `waywallen-lockscreen-sync.path`: Unidad `systemd` que vigila cambios en `~/.config/waywallen/config.toml` para actualización en caliente.

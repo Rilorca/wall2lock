@@ -496,6 +496,150 @@ PYEOF
 }
 
 # -----------------------------------------------------------------------------
+# Test 15: Decodificación y extracción de alta fidelidad desde scene.pkg (LZ4 + DXT5)
+# -----------------------------------------------------------------------------
+echo -e "\n${BLUE}Test 15: Extracción de alta fidelidad de texturas nativas en scene.pkg${NC}"
+{
+    EXTRACTOR_SCRIPT="$REPO_DIR/waywallen_extractor.py"
+    MOCK_PKG_DIR="$TEST_TMPDIR/mock_pkg"
+    mkdir -p "$MOCK_PKG_DIR"
+
+    # Crear mock PKGV con textura DXT5 real comprimida en LZ4
+    MOCK_PKG="$MOCK_PKG_DIR/test_scene.pkg"
+    python3 - <<PYEOF
+import struct, ctypes
+
+lz4_lib = ctypes.CDLL('/usr/lib/liblz4.so')
+lz4_lib.LZ4_compress_default.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_int]
+lz4_lib.LZ4_compress_default.restype = ctypes.c_int
+
+# Mock 100x100 DXT5 texture data
+uncomp_sz = 100 * 100
+raw_dxt = b'\xaa\x55' * (uncomp_sz // 2)
+dst_cap = uncomp_sz * 2
+comp_buf = ctypes.create_string_buffer(dst_cap)
+comp_sz = lz4_lib.LZ4_compress_default(raw_dxt, comp_buf, uncomp_sz, dst_cap)
+
+# Build TEXB content
+texb_hdr = bytearray()
+texb_hdr.extend(b'TEXB0004\x00')
+texb_hdr.extend(struct.pack('<IIIIIIIII', 1, 0, 0, 5, 100, 100, 1, uncomp_sz, comp_sz))
+texb_content = bytes(texb_hdr) + comp_buf.raw[:comp_sz]
+
+# Build PKGV
+magic = b'PKGV0023'
+file_name = b'materials/background.tex'
+file_entry = struct.pack('<I', len(file_name)) + file_name + struct.pack('<II', 0, len(texb_content))
+
+pkg_data = struct.pack('<I', len(magic)) + magic + struct.pack('<I', 1) + file_entry + texb_content
+with open('$MOCK_PKG', 'wb') as pf:
+    pf.write(pkg_data)
+PYEOF
+
+    TEST_USER_OUT="$MOCK_PKG_DIR/user_out.jpg"
+    TEST_GDM_OUT="$MOCK_PKG_DIR/gdm_out.jpg"
+
+    OUT=$(python3 "$EXTRACTOR_SCRIPT" \
+        --type "scene" \
+        --lib "$MOCK_PKG_DIR" \
+        --item "$MOCK_PKG" \
+        --user-out "$TEST_USER_OUT" \
+        --gdm-out "$TEST_GDM_OUT" 2>&1)
+
+    if [[ -f "$TEST_USER_OUT" && -s "$TEST_USER_OUT" ]]; then
+        pass "Decodificación nativa de scene.pkg extrajo textura y generó JPEG de alta calidad"
+    else
+        fail "Extracción scene.pkg" "No se generó el wallpaper desde el paquete. Salida: $OUT"
+    fi
+}
+
+# -----------------------------------------------------------------------------
+# Test 16: Composición multi-monitor para GDM (Duplicación por pantalla)
+# -----------------------------------------------------------------------------
+echo -e "\n${BLUE}Test 16: Composición multi-monitor para GDM (Duplicación por pantalla)${NC}"
+{
+    MM_DIR="$TEST_TMPDIR/multimonitor"
+    mkdir -p "$MM_DIR"
+
+    # Generar imagen base 1920x1080
+    BASE_IMG="$MM_DIR/base.jpg"
+    ffmpeg -y -f lavfi -i color=c=blue:s=1920x1080:d=1 -vframes 1 -q:v 2 "$BASE_IMG" 2>/dev/null
+
+    # Crear mock monitors.xml con 2 pantallas: 2560x1440 en (0,0) y 1920x1080 en (2560,0)
+    MOCK_MONITORS="$MM_DIR/monitors.xml"
+    cat <<'EOF' > "$MOCK_MONITORS"
+<monitors version="2">
+  <configuration>
+    <layoutmode>logical</layoutmode>
+    <logicalmonitor>
+      <x>0</x>
+      <y>0</y>
+      <scale>1</scale>
+      <monitor>
+        <monitorspec><connector>DP-2</connector></monitorspec>
+        <mode><width>2560</width><height>1440</height></mode>
+      </monitor>
+    </logicalmonitor>
+    <logicalmonitor>
+      <x>2560</x>
+      <y>0</y>
+      <scale>1</scale>
+      <monitor>
+        <monitorspec><connector>DP-3</connector></monitorspec>
+        <mode><width>1920</width><height>1080</height></mode>
+      </monitor>
+    </logicalmonitor>
+  </configuration>
+</monitors>
+EOF
+
+    TEST_MM_USER="$MM_DIR/user.jpg"
+    TEST_MM_GDM="$MM_DIR/gdm.jpg"
+
+    python3 "$REPO_DIR/waywallen_extractor.py" \
+        --type "image" \
+        --lib "$MM_DIR" \
+        --item "base.jpg" \
+        --user-out "$TEST_MM_USER" \
+        --gdm-out "$TEST_MM_GDM" \
+        --monitors "$MOCK_MONITORS" >/dev/null 2>&1
+
+    GDM_DIMS=$(python3 -c "from PIL import Image; im = Image.open('$TEST_MM_GDM'); print(f'{im.width}x{im.height}')")
+    if [[ "$GDM_DIMS" == "4480x1440" ]]; then
+        pass "Composición multi-monitor generó lienzo exacto de 4480x1440 (2560+1920x1440) duplicando la imagen por monitor"
+    else
+        fail "Composición multi-monitor" "Dimensiones inesperadas: $GDM_DIMS (esperado 4480x1440)"
+    fi
+}
+
+# -----------------------------------------------------------------------------
+# Test 17: Integración de capturas nativas por monitor (Gsk Renderer Texture)
+# -----------------------------------------------------------------------------
+echo -e "\n${BLUE}Test 17: Integración de capturas nativas por monitor (Gsk Renderer Texture)${NC}"
+{
+    CAP_DIR="$TEST_TMPDIR/captures"
+    mkdir -p "$CAP_DIR"
+    # Crear 2 capturas simuladas
+    ffmpeg -y -f lavfi -i color=c=red:s=2560x1440:d=1 -vframes 1 -q:v 2 "$CAP_DIR/waywallen_capture_0.png" 2>/dev/null
+    ffmpeg -y -f lavfi -i color=c=green:s=1920x1080:d=1 -vframes 1 -q:v 2 "$CAP_DIR/waywallen_capture_1.png" 2>/dev/null
+
+    OUT_GDM="$CAP_DIR/out_gdm.jpg"
+    python3 -c "
+import sys
+sys.path.insert(0, '$REPO_DIR')
+from waywallen_extractor import compose_multi_monitor
+monitors = [{'x': 0, 'y': 0, 'w': 2560, 'h': 1440}, {'x': 2560, 'y': 0, 'w': 1920, 'h': 1080}]
+compose_multi_monitor('/dev/null', '$OUT_GDM', monitors, capture_dir='$CAP_DIR')
+"
+    DIMS=$(python3 -c "from PIL import Image; im = Image.open('$OUT_GDM'); print(f'{im.width}x{im.height}')")
+    if [[ "$DIMS" == "4480x1440" ]]; then
+        pass "Capturas nativas por monitor integradas y compuestas correctamente a 4480x1440"
+    else
+        fail "Capturas nativas por monitor" "Dimensiones compuestas incorrectas: $DIMS"
+    fi
+}
+
+# -----------------------------------------------------------------------------
 # Resumen
 # -----------------------------------------------------------------------------
 echo -e "\n=================================================="
@@ -506,3 +650,4 @@ if [[ $FAILED_TESTS -gt 0 ]]; then
     exit 1
 fi
 exit 0
+
