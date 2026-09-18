@@ -640,6 +640,52 @@ compose_multi_monitor('/dev/null', '$OUT_GDM', monitors, capture_dir='$CAP_DIR')
 }
 
 # -----------------------------------------------------------------------------
+# Test 18: Extracción de texturas modernas con JPEG embebido (TEXV0005)
+# -----------------------------------------------------------------------------
+echo -e "\n${BLUE}Test 18: Extracción de texturas modernas con JPEG embebido (TEXV0005)${NC}"
+{
+    TEX_TEST_DIR="$TEST_TMPDIR/tex_pkg_test"
+    mkdir -p "$TEX_TEST_DIR"
+    MOCK_PKG="$TEX_TEST_DIR/modern_scene.pkg"
+
+    # Generar un JPEG real de 1920x1080 para embeber dentro del .tex
+    RAW_JPEG="$TEX_TEST_DIR/inner_art.jpg"
+    ffmpeg -y -f lavfi -i color=c=blue:s=1920x1080:d=1 -vframes 1 -q:v 2 "$RAW_JPEG" 2>/dev/null
+
+    python3 -c "
+import struct
+raw_jpg = open('$RAW_JPEG', 'rb').read()
+# Construir contenido .tex simulando TEXV0005 con encabezado arbitrario y JPEG embebido
+tex_content = b'TEXV0005' + b'\x00' * 32 + raw_jpg
+
+# Construir PKGV0024
+magic = b'PKGV0024'
+file_name = 'materials/character.tex'.encode('utf-8')
+file_entry = struct.pack('<I', len(file_name)) + file_name + struct.pack('<II', 0, len(tex_content))
+header = struct.pack('<I', len(magic)) + magic + struct.pack('<I', 1) + file_entry
+
+with open('$MOCK_PKG', 'wb') as f:
+    f.write(header)
+    f.write(tex_content)
+"
+
+    OUT_TEX_JPG="$TEX_TEST_DIR/out_extracted.jpg"
+    python3 -c "
+import sys
+sys.path.insert(0, '$REPO_DIR')
+from waywallen_extractor import extract_pkg_texture
+res = extract_pkg_texture('$MOCK_PKG', '$OUT_TEX_JPG')
+assert res == True, 'extract_pkg_texture failed'
+"
+    TEX_DIMS=$(python3 -c "from PIL import Image; im = Image.open('$OUT_TEX_JPG'); print(f'{im.width}x{im.height}')")
+    if [[ "$TEX_DIMS" == "1920x1080" ]]; then
+        pass "Extracción de textura moderna TEXV0005 extrajo imagen JPEG de 1920x1080 con 100% fidelidad"
+    else
+        fail "Extracción TEXV0005" "Dimensiones inesperadas: $TEX_DIMS"
+    fi
+}
+
+# -----------------------------------------------------------------------------
 # Resumen
 # -----------------------------------------------------------------------------
 echo -e "\n=================================================="

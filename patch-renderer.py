@@ -107,8 +107,16 @@ function notifyCaptureUpdated() {
             rect.init(0, 0, w, h);
             const tex = r.render_texture(node, rect);
             if (tex) {
-                const outPath = `/tmp/waywallen_capture_${this._index}.png`;
-                tex.save_to_png(outPath);
+                try {
+                    const home = GLib.get_home_dir();
+                    const capDir = `${home}/.local/share/waywallen/captures`;
+                    GLib.mkdir_with_parents(capDir, 0o755);
+                    const persistentPath = `${capDir}/waywallen_capture_${this._index}.png`;
+                    tex.save_to_png(persistentPath);
+                } catch (_e) {}
+                try {
+                    tex.save_to_png(`/tmp/waywallen_capture_${this._index}.png`);
+                } catch (_e) {}
                 notifyCaptureUpdated();
             }
         } catch (_e) {}

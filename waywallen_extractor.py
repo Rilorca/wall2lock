@@ -42,20 +42,6 @@ def extract_pkg_texture(pkg_path, output_path):
     if not os.path.isfile(pkg_path):
         return False
     try:
-        lz4_path = None
-        for cand in ['/usr/lib/liblz4.so', '/usr/lib/liblz4.so.1', 'liblz4.so', 'liblz4.so.1']:
-            try:
-                lz4_lib = ctypes.CDLL(cand)
-                lz4_path = cand
-                break
-            except Exception:
-                continue
-        if not lz4_path:
-            return False
-
-        lz4_lib.LZ4_decompress_safe.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_int]
-        lz4_lib.LZ4_decompress_safe.restype = ctypes.c_int
-
         with open(pkg_path, 'rb') as f:
             header_peek = f.read(65536)
             if not header_peek.startswith(b'\x08\x00\x00\x00PKGV'):
@@ -77,49 +63,85 @@ def extract_pkg_texture(pkg_path, output_path):
             if not tex_files:
                 return False
             tex_files.sort(key=lambda x: x[2], reverse=True)
-            best = tex_files[0]
 
-            f.seek(header_end + best[1])
-            content = f.read(best[2])
-            texb_idx = content.find(b'TEXB0004')
-            if texb_idx == -1:
-                return False
+            # Try the largest textures (usually background/character artwork)
+            for best in tex_files[:5]:
+                f.seek(header_end + best[1])
+                content = f.read(best[2])
 
-            hdr_bytes = content[texb_idx+9:texb_idx+45]
-            _, _, _, fmt, w, h, _, uncomp_sz, comp_sz = struct.unpack('<IIIIIIIII', hdr_bytes)
-            comp_data = content[texb_idx+45:texb_idx+45+comp_sz]
-            dst = ctypes.create_string_buffer(uncomp_sz)
-            res = lz4_lib.LZ4_decompress_safe(comp_data, dst, comp_sz, uncomp_sz)
-            if res != uncomp_sz:
-                return False
+                # 1. Check for modern Wallpaper Engine embedded raw images (JPEG, PNG, WebP)
+                for magic, ext in [(b'\xff\xd8\xff', '.jpg'), (b'\x89PNG\r\n\x1a\n', '.png'), (b'RIFF', '.webp')]:
+                    idx = content.find(magic)
+                    if idx != -1:
+                        if magic == b'RIFF' and content[idx+8:idx+12] != b'WEBP':
+                            continue
+                        temp_raw = os.path.join(tempfile.gettempdir(), f"pkg_raw_{os.getpid()}_{best[1]}{ext}")
+                        try:
+                            with open(temp_raw, 'wb') as raw_f:
+                                raw_f.write(content[idx:])
+                            subprocess.check_call(['ffmpeg', '-y', '-i', temp_raw, '-q:v', '2', output_path],
+                                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            if os.path.isfile(output_path) and os.path.getsize(output_path) > 0:
+                                return True
+                        except Exception:
+                            pass
+                        finally:
+                            if os.path.isfile(temp_raw):
+                                try:
+                                    os.remove(temp_raw)
+                                except Exception:
+                                    pass
 
-            # Build DDS
-            dds_hdr = bytearray(128)
-            dds_hdr[0:4] = b'DDS '
-            struct.pack_into('<I', dds_hdr, 4, 124)
-            struct.pack_into('<I', dds_hdr, 8, 0x81007)
-            struct.pack_into('<I', dds_hdr, 12, h)
-            struct.pack_into('<I', dds_hdr, 16, w)
-            struct.pack_into('<I', dds_hdr, 20, uncomp_sz)
-            struct.pack_into('<I', dds_hdr, 76, 32)
-            struct.pack_into('<I', dds_hdr, 80, 0x4)
-            dds_hdr[84:88] = b'DXT5' if fmt == 5 else b'DXT1'
-            struct.pack_into('<I', dds_hdr, 108, 0x1000)
+                # 2. Check for LZ4-compressed DDS textures (TEXB0004/TEXB0003)
+                texb_idx = content.find(b'TEXB0004')
+                if texb_idx != -1:
+                    try:
+                        lz4_path = None
+                        for cand in ['/usr/lib/liblz4.so', '/usr/lib/liblz4.so.1', 'liblz4.so', 'liblz4.so.1']:
+                            try:
+                                lz4_lib = ctypes.CDLL(cand)
+                                lz4_path = cand
+                                break
+                            except Exception:
+                                continue
+                        if lz4_path:
+                            lz4_lib.LZ4_decompress_safe.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_int]
+                            lz4_lib.LZ4_decompress_safe.restype = ctypes.c_int
 
-            temp_dds = os.path.join(tempfile.gettempdir(), f"pkg_tex_{os.getpid()}.dds")
-            with open(temp_dds, 'wb') as ddf:
-                ddf.write(dds_hdr)
-                ddf.write(dst.raw)
+                            hdr_bytes = content[texb_idx+9:texb_idx+45]
+                            _, _, _, fmt, w, h, _, uncomp_sz, comp_sz = struct.unpack('<IIIIIIIII', hdr_bytes)
+                            comp_data = content[texb_idx+45:texb_idx+45+comp_sz]
+                            dst = ctypes.create_string_buffer(uncomp_sz)
+                            res = lz4_lib.LZ4_decompress_safe(comp_data, dst, comp_sz, uncomp_sz)
+                            if res == uncomp_sz:
+                                dds_hdr = bytearray(128)
+                                dds_hdr[0:4] = b'DDS '
+                                struct.pack_into('<I', dds_hdr, 4, 124)
+                                struct.pack_into('<I', dds_hdr, 8, 0x81007)
+                                struct.pack_into('<I', dds_hdr, 12, h)
+                                struct.pack_into('<I', dds_hdr, 16, w)
+                                struct.pack_into('<I', dds_hdr, 20, uncomp_sz)
+                                struct.pack_into('<I', dds_hdr, 76, 32)
+                                struct.pack_into('<I', dds_hdr, 80, 0x4)
+                                dds_hdr[84:88] = b'DXT5' if fmt == 5 else b'DXT1'
+                                struct.pack_into('<I', dds_hdr, 108, 0x1000)
 
-            subprocess.check_call(['ffmpeg', '-y', '-i', temp_dds, '-q:v', '2', output_path],
-                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            try:
-                os.remove(temp_dds)
-            except Exception:
-                pass
+                                temp_dds = os.path.join(tempfile.gettempdir(), f"pkg_tex_{os.getpid()}.dds")
+                                with open(temp_dds, 'wb') as ddf:
+                                    ddf.write(dds_hdr)
+                                    ddf.write(dst.raw)
 
-            if os.path.isfile(output_path) and os.path.getsize(output_path) > 0:
-                return True
+                                subprocess.check_call(['ffmpeg', '-y', '-i', temp_dds, '-q:v', '2', output_path],
+                                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                try:
+                                    os.remove(temp_dds)
+                                except Exception:
+                                    pass
+
+                                if os.path.isfile(output_path) and os.path.getsize(output_path) > 0:
+                                    return True
+                    except Exception:
+                        pass
     except Exception:
         pass
     return False
@@ -168,6 +190,31 @@ def extract_high_res_image(item_type, full_item_path, preview_full_path, output_
 
     # 4. Preview fallback (scale if small)
     if preview_full_path and os.path.isfile(preview_full_path):
+        # Guard: check preview dimensions. If tiny (<300x300), look for any larger image in directory
+        is_tiny = False
+        try:
+            with Image.open(preview_full_path) as pimg:
+                if pimg.width < 300 or pimg.height < 300:
+                    is_tiny = True
+        except Exception:
+            pass
+
+        if is_tiny and item_dir:
+            for root, _, fnames in os.walk(item_dir):
+                for fn in fnames:
+                    if fn.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')) and not fn.startswith('.'):
+                        cand_path = os.path.join(root, fn)
+                        try:
+                            with Image.open(cand_path) as cimg:
+                                if cimg.width >= 400 and cimg.height >= 400:
+                                    preview_full_path = cand_path
+                                    is_tiny = False
+                                    break
+                        except Exception:
+                            pass
+                if not is_tiny:
+                    break
+
         try:
             subprocess.check_call(['ffmpeg', '-y', '-i', preview_full_path, '-vframes', '1', '-vf',
                                    r'scale=w=max(1920\,iw):h=-2:flags=lanczos', '-q:v', '2', output_path],
@@ -211,13 +258,29 @@ def parse_monitors_xml(monitors_xml_path):
     except Exception:
         return []
 
-def compose_multi_monitor(source_image_path, target_gdm_path, monitors, capture_dir="/tmp"):
+def get_capture_dir():
+    """Get persistent capture directory with fallback."""
+    custom = os.environ.get("WAYWALLEN_CAPTURE_DIR")
+    if custom:
+        return custom
+    return os.path.expanduser("~/.local/share/waywallen/captures")
+
+def find_monitor_capture(idx, capture_dir=None):
+    """Find capture file for monitor index in persistent cache or /tmp."""
+    cap_dir = capture_dir or get_capture_dir()
+    for d in [cap_dir, "/tmp"]:
+        p = os.path.join(d, f"waywallen_capture_{idx}.png")
+        if os.path.isfile(p) and os.path.getsize(p) > 0:
+            return p
+    return None
+
+def compose_multi_monitor(source_image_path, target_gdm_path, monitors, capture_dir=None):
     """Composite the wallpaper duplicated onto each monitor on the virtual stage."""
     sorted_monitors = sorted(monitors, key=lambda m: (m['x'], m['y'])) if monitors else []
 
     if not monitors or len(monitors) <= 1:
-        cap0 = os.path.join(capture_dir, "waywallen_capture_0.png")
-        src = cap0 if os.path.isfile(cap0) and os.path.getsize(cap0) > 0 else source_image_path
+        cap0 = find_monitor_capture(0, capture_dir)
+        src = cap0 if cap0 else source_image_path
         img = Image.open(src)
         if img.mode != 'RGB':
             img = img.convert('RGB')
@@ -236,9 +299,9 @@ def compose_multi_monitor(source_image_path, target_gdm_path, monitors, capture_
             pass
 
     for idx, m in enumerate(sorted_monitors):
-        cap_file = os.path.join(capture_dir, f"waywallen_capture_{idx}.png")
+        cap_file = find_monitor_capture(idx, capture_dir)
         mon_img = None
-        if os.path.isfile(cap_file) and os.path.getsize(cap_file) > 0:
+        if cap_file:
             try:
                 mon_img = Image.open(cap_file)
             except Exception:
@@ -301,8 +364,8 @@ def main():
     temp_gdm = os.path.join(tempfile.gettempdir(), f"wp_gdm_{os.getpid()}.jpg")
 
     try:
-        live_cap0 = "/tmp/waywallen_capture_0.png"
-        if os.path.isfile(live_cap0) and os.path.getsize(live_cap0) > 0:
+        live_cap0 = find_monitor_capture(0)
+        if live_cap0:
             img = Image.open(live_cap0)
             if img.mode != 'RGB':
                 img = img.convert('RGB')
@@ -341,3 +404,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
