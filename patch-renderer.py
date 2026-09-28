@@ -64,32 +64,25 @@ function notifyCaptureUpdated() {
     code = code.replace(new_imports, new_imports + "\n" + notify_func, 1)
 
     # 3. Reset in _onBindingReady
-    binding_sig = "sx, sy, sw, sh, dx, dy, dw, dh, transform, cr, cg, cb, ca) {"
-    if binding_sig not in code:
-        return False, f"Binding signature not found in {path}"
-    code = code.replace(binding_sig, binding_sig + "\n        this._frames = 0;\n        this._captured = false;", 1)
+    import re
+    binding_match = re.search(r'(_onBindingReady\s*\([^)]*\)\s*\{)', code)
+    if not binding_match:
+        return False, f"_onBindingReady signature not found in {path}"
+    code = code[:binding_match.end()] + "\n        this._frames = 0;\n        this._captured = false;" + code[binding_match.end():]
 
     # 4. Capture in _onFrameReady
-    target_frame = """    _onFrameReady(_idx, _seq, fd) {
-        if (fd >= 0)
-            Waywallen.Display.close_fd(fd);
-        this._frames = (this._frames ?? 0) + 1;
-        this._paintable?.refresh();
-    }"""
-    if target_frame not in code:
+    frame_match = re.search(r'(_onFrameReady\s*\([^)]*\)\s*\{)', code)
+    if not frame_match:
         return False, f"_onFrameReady block not found in {path}"
 
-    new_frame = """    _onFrameReady(_idx, _seq, fd) {
-        if (fd >= 0)
-            Waywallen.Display.close_fd(fd);
-        this._frames = (this._frames ?? 0) + 1;
-        this._paintable?.refresh();
+    frame_hook = """
         if (this._frames === 45 || this._frames === 90) {
             this._captureFrame();
-        }
-    }
+        }"""
+    code = code[:frame_match.end()] + frame_hook + code[frame_match.end():]
 
-    _captureFrame() {
+    # 5. Add _captureFrame method
+    capture_method = """    _captureFrame() {
         try {
             if (!this._paintable || !this._window)
                 return;
@@ -120,8 +113,15 @@ function notifyCaptureUpdated() {
                 notifyCaptureUpdated();
             }
         } catch (_e) {}
-    }"""
-    code = code.replace(target_frame, new_frame, 1)
+    }
+"""
+    if "    _controlGeometry()" in code:
+        code = code.replace("    _controlGeometry()", capture_method + "\n    _controlGeometry()", 1)
+    else:
+        # Fallback to appending inside class before last closing brace
+        last_brace = code.rfind("}")
+        if last_brace != -1:
+            code = code[:last_brace] + capture_method + "\n" + code[last_brace:]
 
     with open(path, "w", encoding="utf-8") as f:
         f.write(code)

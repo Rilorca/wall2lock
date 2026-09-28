@@ -5,8 +5,34 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "Instalando waywallen-lockscreen-sync..."
 
-# 1. Copiar scripts a ~/.local/bin
+# 0. Verificar dependencias básicas
+MISSING_DEPS=()
+for cmd in python3 ffmpeg sqlite3; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        MISSING_DEPS+=("$cmd")
+    fi
+done
+
+if ! python3 -c "from PIL import Image" >/dev/null 2>&1; then
+    MISSING_DEPS+=("python3-pillow")
+fi
+
+if [[ ${#MISSING_DEPS[@]} -gt 0 ]]; then
+    echo -e "\033[0;33m[AVISO] Faltan dependencias necesarias: ${MISSING_DEPS[*]}\033[0m"
+    echo "Instálalas con tu gestor de paquetes:"
+    echo "  - Arch / CachyOS / Manjaro: sudo pacman -S python-pillow ffmpeg sqlite glib2"
+    echo "  - Ubuntu / Debian:          sudo apt install python3-pil ffmpeg sqlite3 libglib2.0-dev-bin"
+    echo "  - Fedora:                   sudo dnf install python3-pillow ffmpeg sqlite glib2-devel"
+    echo ""
+    read -p "¿Deseas continuar de todas formas? (s/N): " -r CONFIRM
+    if [[ ! "$CONFIRM" =~ ^[sSyY]$ ]]; then
+        exit 1
+    fi
+fi
+
+# 1. Copiar scripts a ~/.local/bin y preparar directorio de capturas
 mkdir -p "$HOME/.local/bin"
+mkdir -p "$HOME/.local/share/waywallen/captures"
 cp -f "$SCRIPT_DIR/sync-waywallen-lockscreen.sh" "$HOME/.local/bin/"
 chmod +x "$HOME/.local/bin/sync-waywallen-lockscreen.sh"
 cp -f "$SCRIPT_DIR/waywallen_extractor.py" "$HOME/.local/bin/"
