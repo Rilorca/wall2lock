@@ -51,9 +51,9 @@ git clone https://github.com/Rilorca/waywallen-lockscreen-sync.git && cd waywall
 
 ---
 
-### Paso 3: Habilitar fondo en el arranque del PC (Pantalla de Login / GDM)
+### Paso 3: Configurar el Login Manager (Requerido para GDM / SDDM)
 
-Para que el fondo también se muestre inmediatamente al **encender o reiniciar el PC** antes de iniciar sesión:
+Para que el fondo de Waywallen se aplique en la pantalla de inicio al **encender o reiniciar el PC** (el objetivo central de este proyecto):
 
 * **Si usas GNOME (GDM):**
   ```bash
@@ -66,7 +66,10 @@ Para que el fondo también se muestre inmediatamente al **encender o reiniciar e
   sudo ./setup-sddm-theme.sh
   ```
 
-¡Listo! A partir de este momento, cada vez que elijas o cambies un fondo en Waywallen, tu pantalla de bloqueo y pantalla de inicio se sincronizarán al instante con la máxima resolución.
+> [!TIP]
+> Si ejecutas `./install.sh` de forma interactiva en la terminal, el instalador te ofrecerá aplicar automáticamente este paso con `sudo` al finalizar.
+
+¡Listo! A partir de este momento, cada vez que elijas o cambies un fondo en Waywallen, tu pantalla de bloqueo (`Super+L`) y tu pantalla de inicio de sesión se sincronizarán al instante con la máxima resolución.
 
 ---
 

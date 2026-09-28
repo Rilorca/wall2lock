@@ -68,18 +68,30 @@ echo ""
 # Detectar gestor de pantalla (GDM vs SDDM)
 if systemctl is-active --quiet gdm 2>/dev/null || pgrep -x gdm >/dev/null 2>&1 || [[ "${XDG_CURRENT_DESKTOP:-}" == *"GNOME"* ]]; then
     echo "============================================================"
-    echo " Se detectó GNOME Display Manager (GDM)."
-    echo " Para que el fondo se vea al encender el PC (reinicio/login):"
+    echo " [PASO FUNDAMENTAL] Configuración de tema para GDM:"
+    echo " Para que el fondo se cargue al encender el PC en el login:"
     echo "   sudo $SCRIPT_DIR/setup-gdm-theme.sh"
     echo "============================================================"
+    if [[ -t 0 ]]; then
+        read -p "¿Deseas configurar GDM ahora mismo con sudo? (S/n): " -r RUN_GDM
+        if [[ -z "$RUN_GDM" || "$RUN_GDM" =~ ^[sSyY]$ ]]; then
+            sudo "$SCRIPT_DIR/setup-gdm-theme.sh"
+        fi
+    fi
 elif systemctl is-active --quiet sddm 2>/dev/null || pgrep -x sddm >/dev/null 2>&1; then
     echo "============================================================"
-    echo " Se detectó SDDM."
-    echo " Para habilitar el fondo en SDDM (pantalla previa al login):"
+    echo " [PASO FUNDAMENTAL] Configuración de tema para SDDM:"
+    echo " Para que el fondo se cargue en la pantalla de inicio de SDDM:"
     echo "   sudo $SCRIPT_DIR/setup-sddm-theme.sh"
     echo "============================================================"
+    if [[ -t 0 ]]; then
+        read -p "¿Deseas configurar SDDM ahora mismo con sudo? (S/n): " -r RUN_SDDM
+        if [[ -z "$RUN_SDDM" || "$RUN_SDDM" =~ ^[sSyY]$ ]]; then
+            sudo "$SCRIPT_DIR/setup-sddm-theme.sh"
+        fi
+    fi
 else
-    echo "Para habilitar el fondo en el inicio del PC según tu gestor:"
+    echo "Para habilitar el fondo en el inicio del PC según tu gestor de login:"
     echo "  GNOME/GDM: sudo $SCRIPT_DIR/setup-gdm-theme.sh"
     echo "  SDDM:      sudo $SCRIPT_DIR/setup-sddm-theme.sh"
 fi
