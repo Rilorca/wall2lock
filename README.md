@@ -2,20 +2,20 @@
 
 [![Linux](https://img.shields.io/badge/Platform-Linux%20%7C%20Wayland-blue.svg)](https://wayland.freedesktop.org/)
 [![GNOME](https://img.shields.io/badge/Desktop-GNOME%20Shell%20(GDM)-brightgreen.svg)](https://www.gnome.org/)
-[![KDE / SDDM](https://img.shields.io/badge/KDE%20%2F%20SDDM-En%20Revisión-yellow.svg)](#-alcance-y-compatibilidad)
-[![CPU Usage](https://img.shields.io/badge/CPU%20Idle-0.00%25-success.svg)](#-cómo-funciona-internamente)
+[![KDE / SDDM](https://img.shields.io/badge/KDE%20%2F%20SDDM-In%20Review-yellow.svg)](#-scope--compatibility)
+[![CPU Usage](https://img.shields.io/badge/CPU%20Idle-0.00%25-success.svg)](#-how-it-works)
 [![Tests](https://img.shields.io/badge/Tests-19%2F19%20Passing-brightgreen.svg)](tests/run_tests.sh)
 
-Sincronizador automático, reactivo y de alta fidelidad para llevar el fondo de pantalla animado de [Waywallen](https://github.com/waywallen) a la **pantalla de bloqueo (`Super+L`)** y al **gestor de inicio de sesión / reinicio (GDM y SDDM)** en Linux.
+Automatic, reactive, and high-fidelity synchronizer that brings your active [Waywallen](https://github.com/waywallen) wallpaper directly to your **lock screen (`Super+L`)** and your **system boot/reboot greeter (GDM & SDDM)** on Linux.
 
 ---
 
-## ⚡ Instalación Rápida (Copy-Paste)
+## ⚡ Quick Installation (Copy-Paste)
 
-### Paso 1: Instala las dependencias de tu distribución
+### Step 1: Install dependencies for your distribution
 
 <details open>
-<summary><b>Selecciona tu distribución de Linux:</b></summary>
+<summary><b>Select your Linux distribution:</b></summary>
 
 * **Arch Linux / CachyOS / Manjaro:**
   ```bash
@@ -35,118 +35,118 @@ Sincronizador automático, reactivo y de alta fidelidad para llevar el fondo de 
 
 ---
 
-### Paso 2: Clona e instala en un solo comando
+### Step 2: Clone and install in a single command
 
-Copia y pega este comando en tu terminal:
+Copy and paste this command into your terminal:
 
 ```bash
 git clone https://github.com/Rilorca/waywallen-lockscreen-sync.git && cd waywallen-lockscreen-sync && ./install.sh
 ```
 
-> **¿Qué hace este instalador?**
-> 1. Instala los scripts en `~/.local/bin/`.
-> 2. Configura la captura nativa GPU en el renderer de Waywallen.
-> 3. Habilita los servicios de usuario en `systemd` para sincronización en tiempo real (0% CPU en reposo).
-> 4. Realiza la primera sincronización de tu fondo actual.
+> **What does this installer do?**
+> 1. Installs user scripts into `~/.local/bin/`.
+> 2. Hooks native GPU frame capture into the Waywallen renderer.
+> 3. Enables `systemd --user` units for reactive real-time synchronization (0% CPU at idle).
+> 4. Runs an initial synchronization of your current active wallpaper.
 
 ---
 
-### Paso 3: Configurar el Login Manager (Requerido para GDM / SDDM)
+### Step 3: Configure the Login Manager (Required for GDM / SDDM)
 
-Para que el fondo de Waywallen se aplique en la pantalla de inicio al **encender o reiniciar el PC** (el objetivo central de este proyecto):
+To display the synced wallpaper immediately upon **powering on or restarting your PC** (the core goal of this project):
 
-* **Si usas GNOME (GDM):**
+* **If you use GNOME (GDM):**
   ```bash
   sudo ./setup-gdm-theme.sh
   ```
-  *(Crea automáticamente una copia de respaldo del tema original del sistema y compila las reglas CSS necesarias con permisos para tu usuario).*
+  *(Automatically creates a safety backup of your original system theme and compiles the CSS rules into `gnome-shell-theme.gresource` with write permissions for your user).*
 
-* **Si usas KDE Plasma (SDDM):**
+* **If you use KDE Plasma (SDDM):**
   ```bash
   sudo ./setup-sddm-theme.sh
   ```
 
 > [!TIP]
-> Si ejecutas `./install.sh` de forma interactiva en la terminal, el instalador te ofrecerá aplicar automáticamente este paso con `sudo` al finalizar.
+> When running `./install.sh` interactively in a terminal, it will automatically prompt you to run this step with `sudo` right away.
 
-¡Listo! A partir de este momento, cada vez que elijas o cambies un fondo en Waywallen, tu pantalla de bloqueo (`Super+L`) y tu pantalla de inicio de sesión se sincronizarán al instante con la máxima resolución.
+That's it! Every time you pick or change a wallpaper in Waywallen, both your lock screen (`Super+L`) and your startup login screen will update instantly at full resolution.
 
 ---
 
-## 🎯 Alcance y Compatibilidad
+## 🎯 Scope & Compatibility
 
-| Entorno / Gestor | Estado | Detalles de Soporte |
+| Desktop / Display Manager | Status | Support Details |
 | :--- | :---: | :--- |
-| **GNOME Shell (Bloqueo `Super+L`)** | 🟢 **Verificado** | Sincronización instantánea sin reiniciar sesión ni parpadeos. |
-| **GNOME Display Manager (GDM)** | 🟢 **Verificado** | Fondo persistente desde el encendido/reinicio del PC (pantalla de contraseña). |
-| **Multi-Monitor (Resoluciones mixtas)** | 🟢 **Verificado** | Duplicación limpia 1:1 por pantalla (ej. 2K + 1080p) vía `monitors.xml`. |
-| **Escenas complejas Wallpaper Engine** | 🟢 **Verificado** | Captura directa por GPU (`Gsk.Renderer`) y decodificación de texturas nativas (JPEG/PNG/DDS). |
-| **KDE Plasma (Lockscreen)** | 🟡 **En Revisión** | Actualiza `kscreenlockerrc`. *Disponible para pruebas.* |
-| **SDDM (Login Manager)** | 🟡 **En Revisión** | Script `setup-sddm-theme.sh` disponible. *En fase de pruebas activas.* |
+| **GNOME Shell (Lock screen `Super+L`)** | 🟢 **Verified** | Instant sync without session restarts or desktop flicker. |
+| **GNOME Display Manager (GDM)** | 🟢 **Verified** | Persistent background from system power-on / reboot (password screen). |
+| **Multi-Monitor (Mixed resolutions)** | 🟢 **Verified** | Clean 1:1 duplication per monitor (e.g. 2K + 1080p) via `monitors.xml`. |
+| **Wallpaper Engine Complex Scenes** | 🟢 **Verified** | Direct GPU frame capture (`Gsk.Renderer`) and native texture extraction (JPEG/PNG/DDS). |
+| **KDE Plasma (Lock screen)** | 🟡 **In Review** | Updates `kscreenlockerrc`. *Available for testing.* |
+| **SDDM (Login Manager)** | 🟡 **In Review** | Helper script `setup-sddm-theme.sh` available. *Active testing.* |
 
 > [!NOTE]
-> **Nota sobre KDE / SDDM:**
-> La lógica de actualización para `kscreenlockerrc` y el script de configuración de tema para SDDM están implementados e incluidos en el instalador; sin embargo, el desarrollo y verificación principal se realizaron sobre **GNOME Shell (Wayland) con GDM**. Si utilizas KDE Plasma o SDDM, las funciones están disponibles pero catalogadas como en revisión.
+> **KDE / SDDM Note:**
+> Configuration logic for `kscreenlockerrc` and SDDM themes is implemented and included. However, primary development and validation were conducted on **GNOME Shell (Wayland) with GDM**. Features for KDE Plasma and SDDM are functional but categorized as in review.
 
 ---
 
-## 💎 Características Principales
+## 💎 Key Features
 
-* 🔋 **Cero impacto en batería y procesador (0.00% CPU en reposo)**: Funciona mediante eventos del kernel (`inotify` vía `systemd.path`). No hay procesos en segundo plano consumiendo memoria ni ejecutando bucles constantes.
-* 🖼️ **Cero Pixelado (Ultra Alta Resolución)**:
-  * Intercepta el fotograma renderizado por hardware directamente en la GPU (`Gsk.Renderer.render_texture`).
-  * Desempaqueta texturas nativas de alta resolución (3897x2400+) en archivos `scene.pkg` modernos (`TEXV0005`), impidiendo el uso de thumbnails diminutos (160x160).
-  * Almacena las capturas en disco persistente (`~/.local/share/waywallen/captures/`), sobreviviendo a cualquier reinicio.
-* 🖥️ **Composición Multi-Monitor Inteligente**:
-  * Detecta las dimensiones y posiciones exactas de tus pantallas en `~/.config/monitors.xml`.
-  * Genera un lienzo compuesto unificado (ej. **4480x1440**) donde cada monitor recibe su imagen nítida mapeada 1:1, evitando que GDM estire o corte la imagen entre monitores.
-* 🎨 **Calidad Full Chroma 4:4:4 (`subsampling=0`)**:
-  * Exporta los fondos a JPEG con `quality=100` y submuestreo cromático desactivado, garantizando bordes nítidos en textos, personajes y arte digital.
-* 🛡️ **Seguro y 100% Reversible**:
-  * Cualquier modificación al tema del sistema conserva una copia de seguridad original con fecha y hash intactos.
+* 🔋 **Zero Battery & CPU Overhead (0.00% CPU at Idle)**: Powered by kernel-level filesystem events (`inotify` via `systemd.path`). No long-running daemon polling or consuming background RAM.
+* 🖼️ **Zero Pixelation (Ultra-High Resolution)**:
+  * Intercepts the final hardware-rendered frame directly on the GPU (`Gsk.Renderer.render_texture`).
+  * Unpacks native ultra-res textures (3897x2400+) from modern Wallpaper Engine `scene.pkg` archives (`TEXV0005`), eliminating low-res fallback thumbnails (160x160).
+  * Stores GPU captures in persistent disk cache (`~/.local/share/waywallen/captures/`), surviving system reboots.
+* 🖥️ **Smart Multi-Monitor Compositing**:
+  * Reads physical topology and screen coordinates from `~/.config/monitors.xml`.
+  * Builds a unified virtual canvas (e.g., **4480x1440**) where each screen receives a sharp, un-stretched 1:1 frame.
+* 🎨 **Full Chroma 4:4:4 Quality (`subsampling=0`)**:
+  * Saves images at maximum JPEG quality with chroma subsampling disabled, preserving crystal-clear character outlines, text, and high-contrast edges.
+* 🛡️ **Safe & 100% Reversible**:
+  * Preserves original system theme files with automatic backups and verifiable checksums.
 
 ---
 
-## 🔄 Restauración y Desinstalación
+## 🔄 Revert & Uninstallation
 
-Si en cualquier momento deseas volver a la configuración de fábrica:
+To restore factory settings at any time:
 
-1. **Restaurar el tema original de GDM:**
+1. **Restore the original GDM theme:**
    ```bash
    sudo ./setup-gdm-theme.sh --restore
    ```
-2. **Desactivar los servicios automáticos:**
+2. **Disable automated user units:**
    ```bash
    systemctl --user disable --now waywallen-lockscreen-sync.path waywallen-lockscreen-sync.service
    ```
-3. *(Opcional)* Restaurar el `renderer.js` de la extensión de Waywallen:
+3. *(Optional)* Restore original Waywallen `renderer.js`:
    ```bash
    python3 patch-renderer.py --restore
    ```
 
 ---
 
-## 🔍 Comandos de Verificación y Diagnóstico
+## 🔍 Diagnostics & Status
 
-Para comprobar el estado del servicio en tiempo real:
+Check service health in real-time:
 ```bash
 systemctl --user status waywallen-lockscreen-sync.path
 ```
 
-Para verificar las dimensiones del fondo generado para tus monitores:
+Inspect the generated wallpapers:
 ```bash
-# Fondo del Lockscreen de usuario
+# User lock screen image
 identify ~/.local/share/waywallen/current_lock.jpg
 
-# Fondo multi-monitor de GDM (Inicio del PC)
+# GDM multi-monitor boot wallpaper
 identify /usr/share/backgrounds/waywallen_lock.jpg
 ```
 
 ---
 
-## 🧪 Pruebas Unitarias
+## 🧪 Unit Test Suite
 
-El proyecto incluye una suite completa de 19 pruebas automatizadas con entornos simulados (mocks) que validan el comportamiento ante fallos, parsing TOML/XML, decodificación de paquetes `.pkg`, compatibilidad con texturas modernas y composición multi-monitor:
+The repository includes a comprehensive 19-test automated suite using sandboxed mocks covering failure handling, TOML/XML parsing, PKG texture decoding, modern image formats, and multi-monitor layouts:
 
 ```bash
 ./tests/run_tests.sh
@@ -154,25 +154,25 @@ El proyecto incluye una suite completa de 19 pruebas automatizadas con entornos 
 
 ---
 
-## 📦 Estructura del Proyecto
+## 📦 Project Layout
 
 ```text
 waywallen-lockscreen-sync/
-├── install.sh                  # Instalador interactivo y verificador de dependencias
-├── sync-waywallen-lockscreen.sh # Script orquestador principal de sincronización
-├── waywallen_extractor.py      # Motor de extracción de texturas y compositor multi-monitor
-├── patch-renderer.py           # Hook dinámico para captura GPU en Waywallen (GNOME Shell)
-├── setup-gdm-theme.sh          # Inyector y compilador del tema para GDM
-├── setup-sddm-theme.sh         # Configurador auxiliar para SDDM
-├── waywallen-lockscreen-sync.path    # Unidad systemd (Watcher reactivo inotify)
-├── waywallen-lockscreen-sync.service # Unidad systemd (Lanzador atómico de sincronización)
-├── build-plugin-zip.sh         # Empaquetador para la interfaz de plugins de Waywallen
+├── install.sh                  # Interactive installer and dependency verifier
+├── sync-waywallen-lockscreen.sh # Main synchronization orchestrator
+├── waywallen_extractor.py      # Texture extraction engine & multi-monitor compositor
+├── patch-renderer.py           # Dynamic GPU frame capture hook for Waywallen
+├── setup-gdm-theme.sh          # GDM theme compiler and CSS injector
+├── setup-sddm-theme.sh         # SDDM theme configuration helper
+├── waywallen-lockscreen-sync.path    # systemd inotify watcher
+├── waywallen-lockscreen-sync.service # Atomic systemd oneshot sync unit
+├── build-plugin-zip.sh         # Packager for Waywallen's plugin manager
 └── tests/
-    └── run_tests.sh            # Suite de pruebas unitarias (19/19 tests)
+    └── run_tests.sh            # Automated test suite (19/19 tests)
 ```
 
 ---
 
-## 📄 Licencia
+## 📄 License
 
-Distribuido bajo la licencia MIT. Consulta `LICENSE` para más detalles.
+Distributed under the MIT License. See `LICENSE` for details.
