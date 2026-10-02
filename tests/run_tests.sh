@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Test runner for waywallen-lockscreen-sync
+# Test runner for Wall2Lock (wall2lock)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-SYNC_SCRIPT="$REPO_DIR/sync-waywallen-lockscreen.sh"
+SYNC_SCRIPT="$REPO_DIR/sync-wall2lock.sh"
 
 PASSED_TESTS=0
 FAILED_TESTS=0
@@ -47,7 +47,7 @@ CREATE TABLE "item" (
 EOF
 }
 
-echo -e "${BLUE}=== INICIANDO SUITE DE PRUEBAS UNITARIAS: waywallen-lockscreen-sync ===${NC}"
+echo -e "${BLUE}=== INICIANDO SUITE DE PRUEBAS UNITARIAS: Wall2Lock ===${NC}"
 
 # Save user gsettings to restore on exit
 ORIG_USER_BG=""
@@ -288,8 +288,8 @@ EOF
 # -----------------------------------------------------------------------------
 echo -e "\n${BLUE}Test 9: Verificación de configuración de arranque en unidades systemd${NC}"
 {
-    SVC_FILE="$REPO_DIR/waywallen-lockscreen-sync.service"
-    PATH_FILE="$REPO_DIR/waywallen-lockscreen-sync.path"
+    SVC_FILE="$REPO_DIR/wall2lock.service"
+    PATH_FILE="$REPO_DIR/wall2lock.path"
 
     # Verificar que el servicio tenga directivas de arranque gráfico y D-Bus
     HAS_INSTALL=$(grep -c "WantedBy=graphical-session.target" "$SVC_FILE" || true)
@@ -500,7 +500,7 @@ PYEOF
 # -----------------------------------------------------------------------------
 echo -e "\n${BLUE}Test 15: Extracción de alta fidelidad de texturas nativas en scene.pkg${NC}"
 {
-    EXTRACTOR_SCRIPT="$REPO_DIR/waywallen_extractor.py"
+    EXTRACTOR_SCRIPT="$REPO_DIR/wall2lock_extractor.py"
     MOCK_PKG_DIR="$TEST_TMPDIR/mock_pkg"
     mkdir -p "$MOCK_PKG_DIR"
 
@@ -596,7 +596,7 @@ EOF
     TEST_MM_USER="$MM_DIR/user.jpg"
     TEST_MM_GDM="$MM_DIR/gdm.jpg"
 
-    python3 "$REPO_DIR/waywallen_extractor.py" \
+    python3 "$REPO_DIR/wall2lock_extractor.py" \
         --type "image" \
         --lib "$MM_DIR" \
         --item "base.jpg" \
@@ -627,7 +627,7 @@ echo -e "\n${BLUE}Test 17: Integración de capturas nativas por monitor (Gsk Ren
     python3 -c "
 import sys
 sys.path.insert(0, '$REPO_DIR')
-from waywallen_extractor import compose_multi_monitor
+from wall2lock_extractor import compose_multi_monitor
 monitors = [{'x': 0, 'y': 0, 'w': 2560, 'h': 1440}, {'x': 2560, 'y': 0, 'w': 1920, 'h': 1080}]
 compose_multi_monitor('/dev/null', '$OUT_GDM', monitors, capture_dir='$CAP_DIR')
 "
@@ -673,7 +673,7 @@ with open('$MOCK_PKG', 'wb') as f:
     python3 -c "
 import sys
 sys.path.insert(0, '$REPO_DIR')
-from waywallen_extractor import extract_pkg_texture
+from wall2lock_extractor import extract_pkg_texture
 res = extract_pkg_texture('$MOCK_PKG', '$OUT_TEX_JPG')
 assert res == True, 'extract_pkg_texture failed'
 "
@@ -682,6 +682,141 @@ assert res == True, 'extract_pkg_texture failed'
         pass "Extracción de textura moderna TEXV0005 extrajo imagen JPEG de 1920x1080 con 100% fidelidad"
     else
         fail "Extracción TEXV0005" "Dimensiones inesperadas: $TEX_DIMS"
+    fi
+}
+
+# -----------------------------------------------------------------------------
+# Test 19: Extracción y sincronización hacia SDDM desde skwd-wall
+# -----------------------------------------------------------------------------
+echo -e "\n${BLUE}Test 19: Extracción y sincronización hacia SDDM desde skwd-wall${NC}"
+{
+    SKWD_TEST_DIR="$TEST_TMPDIR/skwd_test"
+    mkdir -p "$SKWD_TEST_DIR/workshop/431960/99999"
+    MOCK_WS_PKG="$SKWD_TEST_DIR/workshop/431960/99999/scene.pkg"
+
+    RAW_ART="$SKWD_TEST_DIR/art.jpg"
+    ffmpeg -y -f lavfi -i color=c=red:s=2560x1440:d=1 -vframes 1 -q:v 2 "$RAW_ART" 2>/dev/null
+
+    python3 -c "
+import struct
+raw_jpg = open('$RAW_ART', 'rb').read()
+tex_content = b'TEXV0005' + b'\x00' * 32 + raw_jpg
+magic = b'PKGV0024'
+file_name = 'materials/wallpaper.tex'.encode('utf-8')
+file_entry = struct.pack('<I', len(file_name)) + file_name + struct.pack('<II', 0, len(tex_content))
+header = struct.pack('<I', len(magic)) + magic + struct.pack('<I', 1) + file_entry
+with open('$MOCK_WS_PKG', 'wb') as f:
+    f.write(header)
+    f.write(tex_content)
+"
+
+    # Mock skwd info
+    USER_WP="$SKWD_TEST_DIR/user_lock.jpg"
+    SDDM_WP="$SKWD_TEST_DIR/sddm_lock.jpg"
+    touch "$SDDM_WP"
+
+    python3 -c "
+import sys
+sys.path.insert(0, '$REPO_DIR')
+from wall2lock_extractor import extract_skwd_wallpaper, safe_write_target
+
+mock_info = {
+    'engine': 'skwd',
+    'type': 'we',
+    'we_id': '99999',
+    'path': '$SKWD_TEST_DIR/workshop/431960/99999'
+}
+res = extract_skwd_wallpaper('$USER_WP', mock_info)
+assert res == True, 'extract_skwd_wallpaper failed'
+safe_write_target('$USER_WP', '$SDDM_WP')
+"
+
+    if [[ -f "$SDDM_WP" ]] && file "$SDDM_WP" | grep -q "JPEG"; then
+        pass "Extracción directa de skwd-wall generó wallpaper para SDDM con éxito"
+    else
+        fail "Extracción skwd SDDM" "SDDM wallpaper no es JPEG o no existe"
+    fi
+}
+
+# -----------------------------------------------------------------------------
+# Test 20: Preservación de org.skwd.wall.plasma en kscreenlockerrc
+# -----------------------------------------------------------------------------
+echo -e "\n${BLUE}Test 20: Preservación de org.skwd.wall.plasma en kscreenlockerrc${NC}"
+{
+    KSCREEN_DIR="$TEST_TMPDIR/kde_conf"
+    mkdir -p "$KSCREEN_DIR"
+    MOCK_KSCREEN="$KSCREEN_DIR/kscreenlockerrc"
+    cat <<'EOF' > "$MOCK_KSCREEN"
+[Greeter]
+WallpaperPlugin=org.skwd.wall.plasma
+
+[Greeter][Wallpaper][org.skwd.wall.plasma][General]
+Assignment={"outputs":["*"],"source":{"kind":"we","path":"/path/to/wall"},"volume":0}
+EOF
+
+    # Ejecutar sync-waywallen-lockscreen con plugin configurado
+    SDDM_TARGET="$TEST_TMPDIR/sddm_protect.jpg"
+    USER_TARGET="$TEST_TMPDIR/user_protect.jpg"
+    touch "$SDDM_TARGET"
+
+    # Mock kreadconfig6 y kwriteconfig6 temporales
+    BIN_MOCK="$TEST_TMPDIR/bin"
+    mkdir -p "$BIN_MOCK"
+    cat <<EOF > "$BIN_MOCK/kreadconfig6"
+#!/bin/bash
+if [[ "\$*" == *"--key WallpaperPlugin"* ]]; then
+    echo "org.skwd.wall.plasma"
+fi
+EOF
+    cat <<EOF > "$BIN_MOCK/kwriteconfig6"
+#!/bin/bash
+if [[ "\$*" == *"--key WallpaperPlugin org.kde.image"* ]]; then
+    echo "ERROR_OVERWRITING_PLUGIN" >> "$TEST_TMPDIR/overwrite.log"
+fi
+EOF
+    chmod +x "$BIN_MOCK/kreadconfig6" "$BIN_MOCK/kwriteconfig6"
+
+    PATH="$BIN_MOCK:$PATH" \
+    FORCE_ENGINE="skwd" \
+    USER_WALLPAPER="$USER_TARGET" \
+    SDDM_WALLPAPER="$SDDM_TARGET" \
+    bash "$SYNC_SCRIPT" >/dev/null 2>&1 || true
+
+    if [[ ! -f "$TEST_TMPDIR/overwrite.log" ]]; then
+        pass "El plugin org.skwd.wall.plasma se preservó intacto sin ser sobreescrito por org.kde.image"
+    else
+        fail "Preservación del plugin" "Se intentó sobreescribir org.skwd.wall.plasma con org.kde.image"
+    fi
+}
+
+# -----------------------------------------------------------------------------
+# Test 21: Validación de Interfaz Gráfica Adwaita (wall2lock_gui.py)
+# -----------------------------------------------------------------------------
+echo -e "\n${BLUE}Test 21: Validación de Interfaz Gráfica Adwaita y Bandeja del Sistema (Wall2Lock)${NC}"
+{
+    GUI_SCRIPT="$REPO_DIR/wall2lock_gui.py"
+    DESKTOP_FILE="$REPO_DIR/wall2lock-gui.desktop"
+
+    if [[ -x "$GUI_SCRIPT" && -f "$DESKTOP_FILE" ]]; then
+        TEST_RUN=$(python3 -c "
+import gi
+gi.require_version('Gtk', '4.0')
+gi.require_version('Adw', '1')
+from gi.repository import GLib
+import wall2lock_gui
+
+app = wall2lock_gui.Wall2LockApp()
+GLib.timeout_add(300, app.quit)
+app.run(['wall2lock_gui', '--minimized'])
+print('GUI_TEST_SUCCESS')
+" 2>&1)
+        if [[ "$TEST_RUN" == *"GUI_TEST_SUCCESS"* ]]; then
+            pass "GUI Adwaita se inicializa, procesa flags CLI y gestiona ciclo de vida sin errores"
+        else
+            fail "GUI Adwaita" "Fallo en la prueba de ejecución: $TEST_RUN"
+        fi
+    else
+        fail "Archivos GUI" "No se encontró el script ejecutable o el archivo .desktop"
     fi
 }
 

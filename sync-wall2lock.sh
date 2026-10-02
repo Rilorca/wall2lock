@@ -16,6 +16,89 @@ if [[ -z "$DBUS_SESSION_BUS_ADDRESS" ]]; then
     fi
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -z "$EXTRACTOR" ]]; then
+    if [[ -f "$SCRIPT_DIR/wall2lock_extractor.py" ]]; then
+        EXTRACTOR="$SCRIPT_DIR/wall2lock_extractor.py"
+    elif [[ -f "$HOME/.local/bin/wall2lock_extractor.py" ]]; then
+        EXTRACTOR="$HOME/.local/bin/wall2lock_extractor.py"
+    else
+        EXTRACTOR="$SCRIPT_DIR/waywallen_extractor.py"
+    fi
+fi
+MONITORS_XML="${MONITORS_XML:-$HOME/.config/monitors.xml}"
+
+# Check if skwd-wall is running or configured in KDE Plasma
+IS_SKWD=0
+if [[ "${FORCE_ENGINE:-}" == "skwd" ]]; then
+    IS_SKWD=1
+elif [[ "${FORCE_ENGINE:-}" == "waywallen" ]]; then
+    IS_SKWD=0
+elif [[ "$CONFIG_PATH" != "$HOME/.config/waywallen/config.toml" ]]; then
+    # Caller explicitly targeted a specific Waywallen config (e.g. in tests)
+    IS_SKWD=0
+elif [[ -f "$CONFIG_PATH" ]]; then
+    if pgrep -x waywallen >/dev/null 2>&1 || systemctl --user is-active --quiet waywallen 2>/dev/null; then
+        IS_SKWD=0
+    elif command -v skwd-helm >/dev/null 2>&1 && pgrep -x skwd-walld >/dev/null 2>&1; then
+        IS_SKWD=1
+    elif grep -q "org.skwd.wall.plasma" "$HOME/.config/kscreenlockerrc" 2>/dev/null; then
+        IS_SKWD=1
+    fi
+else
+    # Default config.toml does not exist: check if skwd is active
+    if command -v skwd-helm >/dev/null 2>&1 && pgrep -x skwd-walld >/dev/null 2>&1; then
+        IS_SKWD=1
+    elif grep -q "org.skwd.wall.plasma" "$HOME/.config/kscreenlockerrc" 2>/dev/null; then
+        IS_SKWD=1
+    elif [[ -f "$HOME/.config/skwd-wall-v2/config.json" ]]; then
+        IS_SKWD=1
+    fi
+fi
+
+if [[ "$IS_SKWD" -eq 1 ]]; then
+    echo "Detected skwd-wall / Plasma environment"
+    USER_DIR="$(dirname "$USER_WALLPAPER")"
+    mkdir -p "$USER_DIR"
+
+    if [[ -f "$EXTRACTOR" ]] && command -v python3 >/dev/null 2>&1; then
+        SKWD_ARGS=(--source skwd --user-out "$USER_WALLPAPER")
+        if [[ -n "$SDDM_WALLPAPER" ]]; then
+            SKWD_ARGS+=(--sddm-out "$SDDM_WALLPAPER")
+        fi
+        if [[ -n "$GDM_WALLPAPER" && -w "$GDM_WALLPAPER" ]]; then
+            SKWD_ARGS+=(--gdm-out "$GDM_WALLPAPER")
+        fi
+
+        if python3 "$EXTRACTOR" "${SKWD_ARGS[@]}"; then
+            echo "Lock screen and SDDM wallpaper synced from skwd: $USER_WALLPAPER"
+
+            # Update GNOME background and screensaver if on GNOME
+            if command -v gsettings >/dev/null 2>&1; then
+                gsettings set org.gnome.desktop.background picture-uri "file://$USER_WALLPAPER" 2>/dev/null || true
+                gsettings set org.gnome.desktop.background picture-uri-dark "file://$USER_WALLPAPER" 2>/dev/null || true
+                gsettings set org.gnome.desktop.screensaver picture-uri "file://$USER_WALLPAPER" 2>/dev/null || true
+            fi
+
+            # Update KDE Lockscreen if available
+            if command -v kwriteconfig6 >/dev/null 2>&1; then
+                CURRENT_PLUGIN=""
+                if command -v kreadconfig6 >/dev/null 2>&1; then
+                    CURRENT_PLUGIN=$(kreadconfig6 --file kscreenlockerrc --group Greeter --key WallpaperPlugin 2>/dev/null || echo "")
+                fi
+                # When skwd is used, ensure the live plasma wallpaper plugin is active
+                if [[ -d "/usr/share/plasma/wallpapers/org.skwd.wall.plasma" ]] || [[ "$CURRENT_PLUGIN" == "org.skwd.wall.plasma" ]]; then
+                    kwriteconfig6 --file kscreenlockerrc --group Greeter --key WallpaperPlugin org.skwd.wall.plasma 2>/dev/null || true
+                fi
+                kwriteconfig6 --file kscreenlockerrc --group Greeter --group Wallpaper --group org.kde.image --group General --key Image "$USER_WALLPAPER" 2>/dev/null || true
+                kwriteconfig6 --file kscreenlockerrc --group Greeter --group Wallpaper --group org.kde.image --group General --key PreviewImage "$USER_WALLPAPER" 2>/dev/null || true
+            fi
+
+            exit 0
+        fi
+    fi
+fi
+
 # Extract current wallpaper ID from config.toml
 if [[ ! -f "$CONFIG_PATH" ]]; then
     echo "Config not found: $CONFIG_PATH"
@@ -52,10 +135,18 @@ fi
 IFS='|' read -r TYPE LIB_PATH ITEM_PATH PREVIEW_PATH <<< "$RESULT"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EXTRACTOR="$SCRIPT_DIR/waywallen_extractor.py"
+if [[ ! -f "$EXTRACTOR" ]]; then
+    if [[ -f "$SCRIPT_DIR/wall2lock_extractor.py" ]]; then
+        EXTRACTOR="$SCRIPT_DIR/wall2lock_extractor.py"
+    elif [[ -f "$HOME/.local/bin/wall2lock_extractor.py" ]]; then
+        EXTRACTOR="$HOME/.local/bin/wall2lock_extractor.py"
+    else
+        EXTRACTOR="$SCRIPT_DIR/waywallen_extractor.py"
+    fi
+fi
 MONITORS_XML="${MONITORS_XML:-$HOME/.config/monitors.xml}"
 
-# High-resolution multi-monitor extraction using waywallen_extractor.py
+# High-resolution multi-monitor extraction using wall2lock_extractor.py
 if [[ -f "$EXTRACTOR" ]] && command -v python3 >/dev/null 2>&1; then
     python3 "$EXTRACTOR" \
         --type "$TYPE" \
@@ -142,7 +233,13 @@ fi
 
 # Update KDE Lockscreen if available
 if command -v kwriteconfig6 >/dev/null 2>&1; then
-    kwriteconfig6 --file kscreenlockerrc --group Greeter --key WallpaperPlugin org.kde.image 2>/dev/null || true
+    CURRENT_PLUGIN=""
+    if command -v kreadconfig6 >/dev/null 2>&1; then
+        CURRENT_PLUGIN=$(kreadconfig6 --file kscreenlockerrc --group Greeter --key WallpaperPlugin 2>/dev/null || echo "")
+    fi
+    if [[ "$CURRENT_PLUGIN" != "org.skwd.wall.plasma" ]]; then
+        kwriteconfig6 --file kscreenlockerrc --group Greeter --key WallpaperPlugin org.kde.image 2>/dev/null || true
+    fi
     kwriteconfig6 --file kscreenlockerrc --group Greeter --group Wallpaper --group org.kde.image --group General --key Image "$USER_WALLPAPER" 2>/dev/null || true
     kwriteconfig6 --file kscreenlockerrc --group Greeter --group Wallpaper --group org.kde.image --group General --key PreviewImage "$USER_WALLPAPER" 2>/dev/null || true
 fi

@@ -1,10 +1,14 @@
 [Unit]
-Description=Watch Waywallen config changes to update lockscreen wallpaper
+Description=Watch wallpaper engine changes to sync lockscreen/SDDM (Wall2Lock)
 After=graphical-session.target
 
 [Path]
 PathModified=%h/.config/waywallen/config.toml
-Unit=waywallen-lockscreen-sync.service
+PathModified=%h/.config/skwd-wall-v2/config.json
+PathModified=%h/.local/share/skwd-wall-v2/wall.sqlite
+PathModified=%h/.config/kscreenlockerrc
+Unit=wall2lock.service
 
 [Install]
 WantedBy=graphical-session.target
+

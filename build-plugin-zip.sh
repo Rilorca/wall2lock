@@ -2,23 +2,23 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OUTPUT_ZIP="$SCRIPT_DIR/waywallen-lockscreen-sync.zip"
+OUTPUT_ZIP="$SCRIPT_DIR/wall2lock.zip"
 TMP_STAGE="$(mktemp -d)"
 
 trap 'rm -rf "$TMP_STAGE"' EXIT
 
-echo "Construyendo paquete de plugin para Waywallen: $OUTPUT_ZIP"
+echo "Construyendo paquete de plugin para Wall2Lock: $OUTPUT_ZIP"
 
 # 1. Crear estructura interna
 mkdir -p "$TMP_STAGE/bin"
 mkdir -p "$TMP_STAGE/i18n"
 
 # 2. Copiar scripts y servicios
-cp -f "$SCRIPT_DIR/sync-waywallen-lockscreen.sh" "$TMP_STAGE/bin/sync-waywallen-lockscreen.sh"
-chmod +x "$TMP_STAGE/bin/sync-waywallen-lockscreen.sh"
+cp -f "$SCRIPT_DIR/sync-wall2lock.sh" "$TMP_STAGE/bin/sync-wall2lock.sh"
+chmod +x "$TMP_STAGE/bin/sync-wall2lock.sh"
 
-cp -f "$SCRIPT_DIR/waywallen_extractor.py" "$TMP_STAGE/bin/waywallen_extractor.py"
-chmod +x "$TMP_STAGE/bin/waywallen_extractor.py"
+cp -f "$SCRIPT_DIR/wall2lock_extractor.py" "$TMP_STAGE/bin/wall2lock_extractor.py"
+chmod +x "$TMP_STAGE/bin/wall2lock_extractor.py"
 
 cp -f "$SCRIPT_DIR/patch-renderer.py" "$TMP_STAGE/patch-renderer.py"
 chmod +x "$TMP_STAGE/patch-renderer.py"
@@ -32,8 +32,8 @@ chmod +x "$TMP_STAGE/setup-gdm-theme.sh"
 cp -f "$SCRIPT_DIR/setup-sddm-theme.sh" "$TMP_STAGE/setup-sddm-theme.sh"
 chmod +x "$TMP_STAGE/setup-sddm-theme.sh"
 
-cp -f "$SCRIPT_DIR/waywallen-lockscreen-sync.service" "$TMP_STAGE/waywallen-lockscreen-sync.service"
-cp -f "$SCRIPT_DIR/waywallen-lockscreen-sync.path" "$TMP_STAGE/waywallen-lockscreen-sync.path"
+cp -f "$SCRIPT_DIR/wall2lock.service" "$TMP_STAGE/wall2lock.service"
+cp -f "$SCRIPT_DIR/wall2lock.path" "$TMP_STAGE/wall2lock.path"
 
 # 3. Crear plugin.toml
 cat <<'EOF' > "$TMP_STAGE/plugin.toml"
@@ -138,6 +138,8 @@ with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
 
 print(f"Paquete ZIP generado exitosamente en: {zip_path}")
 PYEOF
+
+cp -f "$OUTPUT_ZIP" "$SCRIPT_DIR/waywallen-lockscreen-sync.zip"
 
 echo "Contenido de files.txt en el paquete:"
 cat "$TMP_STAGE/files.txt"

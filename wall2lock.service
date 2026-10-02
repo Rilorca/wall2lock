@@ -1,12 +1,13 @@
 [Unit]
-Description=Sync Waywallen wallpaper to Lockscreen and SDDM
+Description=Sync active desktop wallpaper to Lockscreen and SDDM/GDM (Wall2Lock)
 After=graphical-session.target
 PartOf=graphical-session.target
 
 [Service]
 Type=oneshot
-ExecStart=%h/.local/bin/sync-waywallen-lockscreen.sh
+ExecStart=%h/.local/bin/wall2lock-sync
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus
 
 [Install]
 WantedBy=graphical-session.target
+

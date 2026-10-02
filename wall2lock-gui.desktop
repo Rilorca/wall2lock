@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Wall2Lock
+Comment=Sincronizador de fondo para pantalla de bloqueo y login (GDM & SDDM)
+Exec=wall2lock-gui
+Icon=wall2lock
+Terminal=false
+Type=Application
+Categories=Utility;Settings;DesktopSettings;
+StartupNotify=true
+StartupWMClass=io.github.rilorca.wall2lock
+Keywords=wallpaper;lockscreen;sddm;gdm;sync;wall2lock;waywallen;skwd;fondo;bloqueo;
