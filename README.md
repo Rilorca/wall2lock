@@ -98,7 +98,7 @@ Open a terminal and install the required tools for your distribution:
 Run this single command in your terminal to download and set up Wall2Lock:
 
 ```bash
-git clone https://github.com/Rilorca/waywallen-lockscreen-sync.git wall2lock && cd wall2lock && ./install.sh
+git clone https://github.com/Rilorca/wall2lock.git && cd wall2lock && ./install.sh
 ```
 
 > **What does the installer do?**
